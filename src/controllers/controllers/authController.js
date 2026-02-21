@@ -11,7 +11,7 @@ exports.register = async (req, res) => {
   try {
     const { email, password, name, role } = req.body;
 
-    console.log("📥 Register request:", { email, name, role, password });
+    console.log(req.body);
 
     if (!email || !password || !name || !role) {
       return res

@@ -9,7 +9,6 @@ const UserSchema = new Schema({
   phone: String,
   role: { type: String, default: "user" },
   picture: { type: String, ref: "images" },
-  price: { type: Number, default: 0 },
   qualification: String,
   createdAt: { type: Date, default: Date.now },
   // 🔑 Reset password fields
