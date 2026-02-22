@@ -11,15 +11,13 @@ exports.register = async (req, res) => {
   try {
     const { email, password, name, role } = req.body;
 
-    console.log(req.body);
-
     if (!email || !password || !name || !role) {
       return res
         .status(400)
         .json({ message: "Email, password, name and role are required" });
     }
 
-    if (role !== "student" && role !== "teacher") {
+    if (role !== "student" && role !== "instructor") {
       return res.status(400).json({ message: "Invalid user role" });
     }
 
@@ -53,39 +51,36 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const user = await User.findOne({ email }).select("+password");
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    console.log("User found:", {
+      email: user.email,
+      hasPassword: !!user.password,
+    });
 
     const isMatch = await user.comparePassword(password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Invalid credentials" });
+    console.log("Password match:", isMatch);
 
-    // remove password from output
-    const { password: _, ...userWithoutPass } = user.toObject();
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    const userWithoutPass = user.toObject();
+    delete userWithoutPass.password;
 
     res.json({
       user: userWithoutPass,
       token: generateToken({ id: user._id, email: user.email }),
     });
   } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
-// // Profile (protected)
-// exports.getProfile = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.id)
-//       .select("-password")
-//       .populate([{ path: "picture", strictPopulate: false }])
-//       .populate([{ path: "endpoint", strictPopulate: false }]);
-//     res.json(user);
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
-
 // exports.forgotPassword = async (req, res) => {
 //   try {
 //     const { email } = req.body;
@@ -163,47 +158,4 @@ exports.login = async (req, res) => {
 //   } catch (err) {
 //     res.status(500).json({ message: err.message });
 //   }
-// };
-
-// exports.saveFcmToken = async (req, res) => {
-//     try {
-//       const { fcmToken, userId } = req.body;
-
-//       if (!fcmToken || !userId) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "FCM token and userId are required",
-//         });
-//       }
-
-//       // Simply save/update the fcmToken field
-//       const user = await User.findById(userId);
-
-//       if (!user) {
-//         return res.status(404).json({
-//           success: false,
-//           message: "User not found",
-//         });
-//       }
-
-//       // Save the token (this will overwrite if already exists)
-//       user.fcmToken = fcmToken;
-//       await user.save();
-
-//       res.json({
-//         success: true,
-//         message: "FCM token saved successfully",
-//         data: {
-//           userId: user._id,
-//           fcmToken: user.fcmToken,
-//         },
-//       });
-//     } catch (error) {
-//       console.error("❌ Save FCM Token Error:", error);
-//       res.status(500).json({
-//         success: false,
-//         message: "Failed to save FCM token",
-//         error: error.message,
-//       });
-//     }
 // };

@@ -15,6 +15,7 @@ require("dotenv").config();
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: [process.env.FRONTEND_URL || "http://localhost:3000"],
@@ -28,6 +29,7 @@ connectDB();
 
 // Routes
 app.use("/api/auth", require("./src/routes/authRoutes"));
+app.use("/api/instructor", require("./src/routes/instructor"));
 
 // Health check route
 app.get("/", (req, res) => {
