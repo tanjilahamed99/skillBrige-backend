@@ -117,6 +117,23 @@ const CourseSchema = new Schema(
       min: 0,
     },
     reviewedAt: Date,
+    students: [
+      {
+        studentId: { type: Schema.Types.ObjectId, ref: "User" },
+        enrolledAt: Date,
+        progress: { type: Number, default: 0 },
+        status: {
+          type: String,
+          enum: ["enrolled", "completed", "dropped"],
+          default: "enrolled",
+        },
+        paymentStatus: {
+          type: String,
+          enum: ["paid", "pending", "failed", "refunded"],
+          default: "pending",
+        },
+      },
+    ],
   },
   {
     timestamps: true, // Adds createdAt and updatedAt automatically
