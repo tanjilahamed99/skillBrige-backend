@@ -4,8 +4,16 @@ const mongoose = require("mongoose");
 
 exports.createCourse = async (req, res) => {
   try {
-    const { title, description, category, level, price, isFree, status } =
-      req.body;
+    const {
+      title,
+      description,
+      category,
+      level,
+      price,
+      isFree,
+      status,
+      lesson,
+    } = req.body;
     const instructorId = req.params.id;
 
     // Check if instructor exists
@@ -27,9 +35,8 @@ exports.createCourse = async (req, res) => {
 
     let thumbnailUrl = null;
     if (req.file) {
-      thumbnailUrl = req.file.path; 
+      thumbnailUrl = req.file.filename;
     }
-
 
     const slug = title
       .toLowerCase()
@@ -48,6 +55,7 @@ exports.createCourse = async (req, res) => {
       thumbnail: thumbnailUrl,
       instructor: instructorId,
       status: status || "draft",
+      lesson,
     });
 
     await newCourse.save();
@@ -56,6 +64,8 @@ exports.createCourse = async (req, res) => {
     instructor.createdCourses.push({
       courseId: newCourse._id,
       status: status || "draft",
+      thumbnail: thumbnailUrl,
+      title
     });
     await instructor.save();
 
@@ -73,7 +83,6 @@ exports.createCourse = async (req, res) => {
   }
 };
 
-// ==================== UPDATE COURSE ====================
 exports.updateCourse = async (req, res) => {
   try {
     const { id } = req.params;
@@ -162,11 +171,12 @@ exports.updateCourse = async (req, res) => {
   }
 };
 
-// ==================== DELETE COURSE ====================
 exports.deleteCourse = async (req, res) => {
   try {
     const { id } = req.params;
-    const instructorId = req.user.id;
+    const instructorId = req.user._id;
+
+    console.log(id, instructorId);
 
     // Validate course ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -184,20 +194,13 @@ exports.deleteCourse = async (req, res) => {
         message: "Course not found",
       });
     }
-
-    // Check if user is the instructor
-    if (course.instructor.toString() !== instructorId) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only delete your own courses",
-      });
-    }
-
     // Check if there are enrolled students
     const enrolledStudents = await User.countDocuments({
       "enrolledCourses.courseId": id,
     });
 
+
+    
     if (enrolledStudents > 0) {
       return res.status(400).json({
         success: false,
@@ -228,7 +231,6 @@ exports.deleteCourse = async (req, res) => {
   }
 };
 
-// ==================== CHANGE COURSE STATUS ====================
 exports.changeCourseStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -328,7 +330,6 @@ exports.changeCourseStatus = async (req, res) => {
   }
 };
 
-// ==================== GET INSTRUCTOR'S COURSES ====================
 exports.getMyCourses = async (req, res) => {
   try {
     const instructorId = req.user.id;
@@ -366,7 +367,6 @@ exports.getMyCourses = async (req, res) => {
   }
 };
 
-// ==================== GET SINGLE COURSE (for instructor) ====================
 exports.getCourse = async (req, res) => {
   try {
     const { id } = req.params;

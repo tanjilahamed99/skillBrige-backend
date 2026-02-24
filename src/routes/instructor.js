@@ -9,16 +9,17 @@ const {
   changeCourseStatus,
 } = require("../controllers/controllers/inractorController");
 const upload = require("../middleware/upload");
+const { instructorOnly } = require("../middleware/protect");
 
-// router.get("/", getMyCourses);
+router.get("/all/:id", instructorOnly, getMyCourses);
 
-// router.get("/:id", getCourse);
+router.get("/:id", instructorOnly, getCourse);
 
-router.post("/:id", upload.single("thumbnail"), createCourse);
+router.post("/:id", instructorOnly, upload.single("thumbnail"), createCourse);
 
-// router.put("/:id", upload.single("thumbnail"), updateCourse);
+router.put("/:id", instructorOnly, upload.single("thumbnail"), updateCourse);
 
-// router.delete("/:id", deleteCourse);
+router.delete("/:id", instructorOnly, deleteCourse);
 
 // router.patch("/:id/status", changeCourseStatus);
 
