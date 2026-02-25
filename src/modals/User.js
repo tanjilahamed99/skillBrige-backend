@@ -21,7 +21,7 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["student", "instructor", "admin",'superAdmin'],
+      enum: ["student", "instructor", "admin", "superAdmin"],
       default: "student",
     },
     status: {
@@ -66,12 +66,7 @@ const UserSchema = new mongoose.Schema(
           min: 0,
           max: 100,
         },
-        completedLessons: [
-          {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Lesson",
-          },
-        ],
+        completedLessons: [],
         paymentStatus: {
           type: String,
           enum: ["pending", "completed", "failed"],

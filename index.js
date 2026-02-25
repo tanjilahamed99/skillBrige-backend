@@ -31,6 +31,7 @@ connectDB();
 app.use("/api/auth", require("./src/routes/authRoutes"));
 app.use("/api/instructor", require("./src/routes/instructor"));
 app.use("/api/superAdmin", require("./src/routes/superAdminRoutes"));
+app.use("/api/student", require("./src/routes/studentRoutes"));
 
 // Health check route
 app.get("/", (req, res) => {

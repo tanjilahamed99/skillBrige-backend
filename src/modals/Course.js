@@ -76,7 +76,7 @@ const CourseSchema = new Schema(
     },
     lesson: [
       {
-        type: Schema.Types.ObjectId,
+        _id: Schema.Types.ObjectId,
         title: String,
         description: String,
         duration: String,
@@ -131,7 +131,7 @@ const CourseSchema = new Schema(
           type: String,
           enum: ["paid", "pending", "failed", "refunded"],
           default: "pending",
-        },
+        }
       },
     ],
   },
