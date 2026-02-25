@@ -1,539 +1,511 @@
-// const Contact = require("../models/Contact");
-// const LiveKit = require("../models/LiveKit");
-// const Paygic = require("../models/Paygic");
-// const Razorpay = require("../models/Razorpay");
-// const User = require("../models/User");
-// const WebsiteInfo = require("../models/WebsiteInfo");
+const Course = require("../../modals/Course");
+const User = require("../../modals/User");
 
-// exports.getAllUsers = async (req, res) => {
-//   try {
-//     const users = await User.find({}).select("-password");
-//     res.status(200).json(users);
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
+// courses
+exports.getAllCourses = async (req, res) => {
+  try {
+    const courses = await Course.find().populate("instructor", "name email");
+    res.status(200).json({
+      success: true,
+      courses,
+    });
+  } catch (err) {
+    console.error("Get all users error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+exports.updateCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const course = await Course.findOne({ _id: courseId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+    const { status } = req.body;
+    const update = {
+      $set: {
+        status: status,
+      },
+    };
+    const updateCourse = await Course.findByIdAndUpdate(
+      { _id: courseId },
+      update,
+    );
+    res.status(200).json({
+      success: true,
+      course: updateCourse,
+      message: "Course status updated successfully",
+    });
+  } catch (err) {
+    console.error("Get all users error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+exports.updateUserStatus = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.body;
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and id are required",
+      });
+    }
 
-// exports.deleteUser = async (req, res) => {
-//   try {
-//     const { userId } = req.body;
-//     const user = await User.findByIdAndDelete(userId);
-//     if (!user) return res.status(404).json({ message: "User not found" });
-//     res.json({ message: "User deleted successfully" });
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+    if (status) user.status = status;
+    await user.save();
 
-// exports.updateUser = async (req, res) => {
-//   try {
-//     const { userId, ...updateData } = req.body;
+    res.status(201).json({
+      success: true,
+      message: "user updated successfully",
+      user,
+    });
+  } catch (err) {
+    console.error("Get all users error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
-//     // Find the user first
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ message: "User not found" });
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-//     // Check if password is being updated
-//     if (updateData.password) {
-//       // Set the password (it will be hashed in pre-save middleware)
-//       user.password = updateData.password;
-//       delete updateData.password; // Remove from updateData to avoid duplication
-//     }
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin id is required",
+      });
+    }
+    const admin = await User.findById(id);
+    if (!admin || admin.role !== "admin") {
+      return res.status(404).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+    await User.findByIdAndDelete(id);
+    res.status(200).json({
+      success: true,
+      message: "Admin deleted successfully",
+    });
+  } catch (err) {
+    console.error("Get all users error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
-//     // Update other fields
-//     Object.assign(user, updateData);
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({
+      role: { $in: ["student", "instructor"] },
+    }).select("-password");
+    res.status(200).json({
+      success: true,
+      users,
+    });
+  } catch (err) {
+    console.error("Get all users error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 
-//     // Save the user
-//     await user.save();
+exports.adminAnalysis = async (req, res) => {
+  try {
+    // 1. Basic Counts
+    const totalUsers = await User.countDocuments();
+    const totalStudents = await User.countDocuments({ role: "student" });
+    const totalInstructors = await User.countDocuments({ role: "instructor" });
+    const totalAdmins = await User.countDocuments({ role: "admin" });
 
-//     // Convert to plain object and remove password
-//     const userObject = user.toObject();
-//     delete userObject.password;
+    const totalCourses = await Course.countDocuments();
+    const publishedCourses = await Course.countDocuments({
+      status: "published",
+    });
+    const pendingCourses = await Course.countDocuments({ status: "pending" });
+    const draftCourses = await Course.countDocuments({ status: "draft" });
+    const archivedCourses = await Course.countDocuments({ status: "archived" });
 
-//     res.json({
-//       message: "User updated successfully",
-//       status: 200,
-//       success: true,
-//       user: userObject,
-//     });
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
+    // 2. Revenue Calculation (only from paid students in published courses)
+    const totalRevenueResult = await Course.aggregate([
+      { $match: { status: "published" } },
+      {
+        $project: {
+          price: 1,
+          paidStudents: {
+            $size: {
+              $filter: {
+                input: "$students",
+                as: "student",
+                cond: { $eq: ["$$student.paymentStatus", "paid"] },
+              },
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $multiply: ["$price", "$paidStudents"] } },
+        },
+      },
+    ]);
+    const totalRevenue = totalRevenueResult[0]?.total || 0;
 
-// exports.setPaygic = async (req, res) => {
-//   try {
-//     const updatedData = req.body;
-//     let settings = await Paygic.findOne();
-//     if (!settings) {
-//       // If no document exists yet, create it
-//       settings = new Paygic(updatedData);
-//     } else {
-//       // Update existing document
-//       Object.assign(settings, updatedData);
-//     }
+    // 3. Total Enrollments (all students across all published courses)
+    const totalEnrollmentResult = await Course.aggregate([
+      { $match: { status: "published" } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $size: "$students" } },
+        },
+      },
+    ]);
+    const totalEnrollments = totalEnrollmentResult[0]?.total || 0;
 
-//     await settings.save();
-//     res.json({
-//       success: true,
-//       message: "Website settings updated",
-//       data: settings,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error updating website settings", success: false });
-//   }
-// };
+    // 4. Course Completion Stats
+    const completionStats = await Course.aggregate([
+      { $match: { status: "published" } },
+      {
+        $group: {
+          _id: null,
+          totalCompletions: { $sum: "$totalCompletions" },
+          avgCompletionRate: { $avg: "$completionRate" },
+        },
+      },
+    ]);
+    const totalCompletions = completionStats[0]?.totalCompletions || 0;
+    const averageCompletionRate = completionStats[0]?.avgCompletionRate || 0;
 
-// exports.setLiveKit = async (req, res) => {
-//   try {
-//     const updatedData = req.body;
-//     let settings = await LiveKit.findOne();
-//     if (!settings) {
-//       // If no document exists yet, create it
-//       settings = new LiveKit(updatedData);
-//     } else {
-//       // Update existing document
-//       Object.assign(settings, updatedData);
-//     }
+    // 5. Category Distribution
+    const categoryDistribution = await Course.aggregate([
+      { $match: { status: "published" } },
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 },
+          students: { $sum: { $size: "$students" } },
+          revenue: {
+            $sum: {
+              $multiply: [
+                "$price",
+                {
+                  $size: {
+                    $filter: {
+                      input: "$students",
+                      as: "student",
+                      cond: { $eq: ["$$student.paymentStatus", "paid"] },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
 
-//     await settings.save();
-//     res.json({
-//       success: true,
-//       message: "Website settings updated",
-//       data: settings,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error updating website settings", success: false });
-//   }
-// };
+    // 6. Level Distribution
+    const levelDistribution = await Course.aggregate([
+      { $match: { status: "published" } },
+      {
+        $group: {
+          _id: "$level",
+          count: { $sum: 1 },
+          students: { $sum: { $size: "$students" } },
+        },
+      },
+    ]);
 
-// exports.getLiveKitData = async (req, res) => {
-//   try {
-//     const settings = await LiveKit.findOne(); // Only one document expected
-//     if (!settings) {
-//       return res
-//         .status(404)
-//         .json({ message: "Website settings not found", success: false });
-//     }
+    // 7. Monthly Growth (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-//     return res.json({ success: true, data: settings });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error fetching website settings", success: false });
-//   }
-// };
+    const monthlyUserGrowth = await User.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
+    ]);
 
-// exports.setRazorpay = async (req, res) => {
-//   try {
-//     const updatedData = req.body;
-//     let settings = await Razorpay.findOne();
-//     if (!settings) {
-//       // If no document exists yet, create it
-//       settings = new Razorpay(updatedData);
-//     } else {
-//       // Update existing document
-//       Object.assign(settings, updatedData);
-//     }
+    const monthlyCourseGrowth = await Course.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
+    ]);
 
-//     await settings.save();
-//     res.json({
-//       success: true,
-//       message: "Website settings updated",
-//       data: settings,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error updating website settings", success: false });
-//   }
-// };
+    // 8. Top Instructors
+    const topInstructors = await User.aggregate([
+      { $match: { role: "instructor" } },
+      {
+        $lookup: {
+          from: "courses",
+          localField: "_id",
+          foreignField: "instructor",
+          as: "courses",
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          picture: 1,
+          // Total courses created
+          totalCourses: { $size: "$courses" },
+          // Published courses
+          publishedCourses: {
+            $size: {
+              $filter: {
+                input: "$courses",
+                as: "course",
+                cond: { $eq: ["$$course.status", "published"] },
+              },
+            },
+          },
+          // Total students across all courses
+          totalStudents: {
+            $sum: {
+              $map: {
+                input: "$courses",
+                as: "course",
+                in: { $size: "$$course.students" },
+              },
+            },
+          },
+          // Total revenue
+          totalRevenue: {
+            $sum: {
+              $map: {
+                input: "$courses",
+                as: "course",
+                in: {
+                  $multiply: [
+                    "$$course.price",
+                    {
+                      $size: {
+                        $filter: {
+                          input: "$$course.students",
+                          as: "student",
+                          cond: { $eq: ["$$student.paymentStatus", "paid"] },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          // Average rating
+          avgRating: { $avg: "$courses.averageRating" },
+        },
+      },
+      { $match: { publishedCourses: { $gt: 0 } } },
+      { $sort: { totalRevenue: -1 } },
+      { $limit: 10 },
+    ]);
 
-// exports.setWebData = async (req, res) => {
-//   try {
-//     const updatedData = req.body;
-//     let settings = await WebsiteInfo.findOne();
-//     if (!settings) {
-//       // If no document exists yet, create it
-//       settings = new WebsiteInfo(updatedData);
-//     } else {
-//       // Update existing document
-//       Object.assign(settings, updatedData);
-//     }
+    // 9. Popular Courses
+    const popularCourses = await Course.aggregate([
+      { $match: { status: "published" } },
+      {
+        $project: {
+          title: 1,
+          thumbnail: 1,
+          price: 1,
+          isFree: 1,
+          instructor: 1,
+          category: 1,
+          level: 1,
+          totalEnrollments: { $size: "$students" },
+          totalCompletions: 1,
+          averageRating: 1,
+          totalReviews: 1,
+          revenue: {
+            $multiply: [
+              "$price",
+              {
+                $size: {
+                  $filter: {
+                    input: "$students",
+                    as: "student",
+                    cond: { $eq: ["$$student.paymentStatus", "paid"] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+      { $sort: { totalEnrollments: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "instructor",
+          foreignField: "_id",
+          as: "instructorDetails",
+        },
+      },
+      {
+        $addFields: {
+          instructorName: { $arrayElemAt: ["$instructorDetails.name", 0] },
+        },
+      },
+      { $project: { instructorDetails: 0 } },
+    ]);
 
-//     await settings.save();
-//     res.json({
-//       success: true,
-//       message: "Website settings updated",
-//       data: settings,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error updating website settings", success: false });
-//   }
-// };
+    // 10. Recent Activities
+    const recentEnrollments = await Course.aggregate([
+      { $unwind: "$students" },
+      { $sort: { "students.enrolledAt": -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "students.studentId",
+          foreignField: "_id",
+          as: "studentDetails",
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "instructor",
+          foreignField: "_id",
+          as: "instructorDetails",
+        },
+      },
+      {
+        $project: {
+          courseTitle: "$title",
+          studentName: { $arrayElemAt: ["$studentDetails.name", 0] },
+          instructorName: { $arrayElemAt: ["$instructorDetails.name", 0] },
+          enrolledAt: "$students.enrolledAt",
+          type: { $literal: "enrollment" },
+        },
+      },
+    ]);
 
-// exports.getPayGicData = async (req, res) => {
-//   try {
-//     const settings = await Paygic.findOne(); // Only one document expected
-//     if (!settings) {
-//       return res
-//         .status(404)
-//         .json({ message: "Website settings not found", success: false });
-//     }
+    const recentCourseCreations = await Course.aggregate([
+      { $sort: { createdAt: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "users",
+          localField: "instructor",
+          foreignField: "_id",
+          as: "instructorDetails",
+        },
+      },
+      {
+        $project: {
+          courseTitle: "$title",
+          instructorName: { $arrayElemAt: ["$instructorDetails.name", 0] },
+          createdAt: 1,
+          type: { $literal: "course_creation" },
+        },
+      },
+    ]);
 
-//     return res.json({ success: true, data: settings });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error fetching website settings", success: false });
-//   }
-// };
+    // Combine and sort recent activities
+    const recentActivities = [...recentEnrollments, ...recentCourseCreations]
+      .sort(
+        (a, b) =>
+          new Date(b.enrolledAt || b.createdAt) -
+          new Date(a.enrolledAt || a.createdAt),
+      )
+      .slice(0, 10);
 
-// exports.getRazorpayData = async (req, res) => {
-//   try {
-//     const settings = await Razorpay.findOne(); // Only one document expected
-//     if (!settings) {
-//       return res
-//         .status(404)
-//         .json({ message: "Website settings not found", success: false });
-//     }
+    // 11. Platform Overview
+    const platformOverview = {
+      totalUsers,
+      totalStudents,
+      totalInstructors,
+      totalAdmins,
+      totalCourses,
+      publishedCourses,
+      pendingCourses,
+      draftCourses,
+      archivedCourses,
+      totalEnrollments,
+      totalCompletions,
+      totalRevenue,
+      averageCompletionRate: Math.round(averageCompletionRate * 10) / 10,
+    };
 
-//     return res.json({ success: true, data: settings });
-//   } catch (error) {
-//     console.error(error);
-//     res
-//       .status(500)
-//       .json({ message: "Error fetching website settings", success: false });
-//   }
-// };
+    // 12. Growth Trends
+    const growthTrends = {
+      users: monthlyUserGrowth.map((item) => ({
+        month: `${item._id.year}-${item._id.month.toString().padStart(2, "0")}`,
+        count: item.count,
+      })),
+      courses: monthlyCourseGrowth.map((item) => ({
+        month: `${item._id.year}-${item._id.month.toString().padStart(2, "0")}`,
+        count: item.count,
+      })),
+    };
 
-// exports.creditUser = async (req, res) => {
-//   try {
-//     const { userId, userEmail, credit } = req.body;
-
-//     if (!userId || !userEmail || !credit) {
-//       return res.send({
-//         message: "All fields are required.",
-//         success: false,
-//       });
-//     }
-//     const findUser = await User.findOne({
-//       _id: userId,
-//       email: userEmail,
-//     });
-
-//     if (!findUser) {
-//       return res.send({
-//         message: "User not found.",
-//         success: false,
-//       });
-//     }
-
-//     // new code     // Prepare transaction history entry
-//     const transactionId = `txn_${Date.now()}_${Math.random()
-//       .toString(36)
-//       .substr(2, 9)}`;
-
-//     // Create transaction record
-//     const transactionRecord = {
-//       transactionId,
-//       author: {
-//         name: `${findUser.firstName}${" "}${findUser.lastName}`,
-//         email: findUser.email,
-//         id: userId,
-//       },
-//       historyType: "Admin Credit",
-//       amount: credit,
-//       paymentMethod: "Credit",
-//       status: "completed",
-//     };
-
-//     // Update my account
-//     const updateUserData = await User.findOneAndUpdate(
-//       { _id: userId },
-//       {
-//         $set: {
-//           balance: { amount: findUser.balance.amount + parseInt(credit) },
-//         },
-//         $push: {
-//           history: {
-//             $each: [
-//               {
-//                 ...transactionRecord,
-//               },
-//             ],
-//             $position: 0,
-//           },
-//         },
-//       },
-//       { new: true, runValidators: true }
-//     );
-
-//     res.send({
-//       message: "User balance updated successfully.",
-//       success: true,
-//       data: updateUserData,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
-
-// exports.consultantStatusUpdate = async (req, res) => {
-//   try {
-//     const { consultantId, consultantStatus } = req.body;
-
-//     if (!consultantId || !consultantStatus) {
-//       return res.send({
-//         message: "Invalid data",
-//         success: false,
-//       });
-//     }
-
-//     const user = await User.findOne({ _id: consultantId });
-//     if (!user) {
-//       return res.status(404).json({
-//         message: "No consultant found.",
-//         success: false,
-//       });
-//     }
-
-//     // Find the specific withdrawal object from their history
-//     const update = {
-//       $set: {
-//         consultantStatus,
-//       },
-//     };
-//     const result = await User.findOneAndUpdate({ _id: user._id }, update);
-//     if (!result) {
-//       res.send({
-//         message: "same thing error here",
-//         success: false,
-//       });
-//     }
-//     res.send({
-//       message: "Update completed",
-//       success: true,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
-
-// exports.allWithdrawalRequest = async (req, res) => {
-//   try {
-//     // Fetch only the 'history' field from all users
-//     const users = await User.find({}, "history");
-
-//     // Flatten all history arrays into a single array
-//     const allHistory = users.flatMap((user) => user.history);
-//     const filteredHistory = allHistory.filter(
-//       (entry) => entry.historyType === "withdrawal"
-//     );
-//     res.send({
-//       message: "All user history retrieved successfully.",
-//       success: true,
-//       data: filteredHistory,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
-
-// exports.getSingleWithdrawal = async (req, res) => {
-//   try {
-//     const { withdrawalId } = req.params;
-//     const user = await User.findOne({ "history._id": withdrawalId });
-//     if (!user) {
-//       return res.status(404).json({
-//         message: "No user found with this withdrawal request.",
-//         success: false,
-//       });
-//     }
-
-//     // Find the specific withdrawal object from their history
-//     const withdrawal = user.history.find(
-//       (item) => item._id.toString() === withdrawalId
-//     );
-
-//     if (!withdrawal) {
-//       return res.status(404).json({
-//         message: "Withdrawal not found in user history.",
-//         success: false,
-//       });
-//     }
-
-//     res.json({
-//       message: "Withdrawal found.",
-//       success: true,
-//       withdrawal,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
-
-// exports.updateWithdrawalStatus = async (req, res) => {
-//   try {
-//     const { withdrawalId } = req.params;
-//     const { status } = req.body;
-//     console.log(status);
-
-//     // // Validate input
-//     if (!withdrawalId || !status) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Withdrawal ID and status are required",
-//       });
-//     }
-
-//     // Find user with the withdrawal request
-//     const user = await User.findOne({ "history._id": withdrawalId });
-//     if (!user) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Withdrawal request not found",
-//       });
-//     }
-
-//     // Find the specific withdrawal
-//     const withdrawalIndex = user.history.findIndex(
-//       (item) => item._id.toString() === withdrawalId
-//     );
-
-//     if (withdrawalIndex === -1) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Withdrawal not found in user history",
-//       });
-//     }
-
-//     // Update withdrawal status
-//     user.history[withdrawalIndex].status = status;
-
-//     // Handle different statuses
-//     const updateOperations = {
-//       $set: {
-//         history: user.history,
-//       },
-//     };
-
-//     if (status === "Reject") {
-//       // Refund balance when rejected
-//       updateOperations.$inc = {
-//         "balance.amount": user.history[withdrawalIndex].amount,
-//       };
-//     }
-
-//     // Update user
-//     await User.findByIdAndUpdate(user._id, updateOperations);
-
-//     // Send success response
-//     res.json({
-//       success: true,
-//       message: `Withdrawal ${status.toLowerCase()} successfully`,
-//       data: {
-//         withdrawal: user.history[withdrawalIndex],
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Update withdrawal error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to update withdrawal status",
-//     });
-//   }
-// };
-
-// exports.allTransaction = async (req, res) => {
-//   try {
-//     // Fetch only the 'history' field from all users
-//     const users = await User.find({}, "history");
-//     // Flatten all history arrays into a single array
-//     const allHistory = users.flatMap((user) => user.history);
-//     res.send({
-//       message: "All user history retrieved successfully.",
-//       success: true,
-//       data: allHistory,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
-
-// exports.allContact = async (req, res) => {
-//   try {
-//     const contact = await Contact.find({});
-//     if (!contact) {
-//       return res.send({
-//         message: "No contact found.",
-//       });
-//     }
-//     res.send({
-//       message: "All contact retrieved successfully.",
-//       success: true,
-//       data: contact,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
-
-// exports.deleteContact = async (req, res) => {
-//   try {
-//     const { contactId } = req.body;
-//     const contact = await Contact.findByIdAndDelete(contactId);
-//     if (!contact) {
-//       return res.send({
-//         message: "Contact not found.",
-//         success: false,
-//       });
-//     }
-//     res.send({
-//       message: "Contact deleted successfully.",
-//       success: true,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.send({
-//       message: "An error occurred while processing your request.",
-//       success: false,
-//     });
-//   }
-// };
+    // Send response
+    res.status(200).json({
+      success: true,
+      data: {
+        overview: platformOverview,
+        distribution: {
+          categories: categoryDistribution,
+          levels: levelDistribution,
+        },
+        topInstructors,
+        popularCourses,
+        recentActivities,
+        growthTrends,
+      },
+    });
+  } catch (err) {
+    console.error("Admin analytics error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message || "Failed to fetch analytics",
+    });
+  }
+};
